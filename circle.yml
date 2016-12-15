@@ -1,0 +1,47 @@
+machine:
+  timezone: Asia/Tokyo
+  java:
+    version: oraclejdk8
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    MYSQL_DL_URL: http://downloads.mysql.com/archives/get/file
+  pre:
+    - curl -sSL https://s3.amazonaws.com/circle-downloads/install-circleci-docker.sh | bash -s -- 1.10.0
+  services:
+    - docker
+
+# Collect build artifacts
+general:
+  artifacts:
+    - target/universal
+
+dependencies:
+  pre:
+    - echo '-mem 1500' >> .sbtopts
+    - sudo service mysql stop
+    - sudo service postgresql stop
+    - docker run --name mysql -e MYSQL_ALLOW_EMPTY_PASSWORD=yes -p 3306:3306 -d mysql:latest
+    - sudo pip install docker-compose
+    - ./script/circleci/setup.sh
+  # Cache the resolution-cache and build streams to speed things up
+  cache_directories:
+    - "~/.sbt"
+    - "target/resolution-cache"
+    - "target/streams"
+    - "project/target/resolution-cache"
+    - "project/target/streams"
+    - "~/nvm"
+  # Compile all sources
+  post:
+    - mysql -u root -h 127.0.0.1 < $HOME/$CIRCLE_PROJECT_REPONAME/sql/setup.sql
+    - mysql db -u root -h 127.0.0.1 < $HOME/$CIRCLE_PROJECT_REPONAME/sql/ddl.sql
+  override:
+    - sbt update
+
+test:
+  override:
+    - sbt compile test
+  # Copy test reports to Circle test reports dir then package app for deploy
+  post:
+    - mkdir -p $CIRCLE_TEST_REPORTS/junit/
+    - find . -type f -regex ".*/target/test-reports/.*xml" -exec cp {} $CIRCLE_TEST_REPORTS/junit/ \;  #Copy to Result

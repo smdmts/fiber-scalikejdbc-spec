@@ -1,0 +1,13 @@
+version: '2'
+services:
+  mysql:
+    build:
+       context: ./mysql
+    ports:
+      - 3306:3306
+    volumes:
+      - data:/var/lib/mysql
+
+volumes:
+  data:
+    driver: local
